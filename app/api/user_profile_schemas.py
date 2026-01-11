@@ -8,6 +8,7 @@ Visibility = Literal["PUBLIC", "ONLY_CONNECTIONS", "PRIVATE"]
 class UserProfileUpdate(BaseModel):
     headline: Optional[str] = Field(default=None, max_length=140)
     about: Optional[str] = None
+    profile_photo_url: Optional[str] = Field(default=None, max_length=255)
 
     location: Optional[str] = Field(default=None, max_length=120)
     pronouns: Optional[str] = Field(default=None, max_length=40)

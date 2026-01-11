@@ -41,6 +41,7 @@ def search_public_users(db: Session, q: str, limit: int = 10):
             "headline": getattr(profile, "headline", None) if profile else None,
             "achievement_total": achievement_total,
             "recommendation_total": recommendation_total,
+            "profile_photo_url": getattr(profile, "profile_photo_url", None) if profile else None,
         })
 
     return results

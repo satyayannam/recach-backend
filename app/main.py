@@ -20,6 +20,8 @@ from app.api.admin_auth import router as admin_auth_router
 from app.api.feed import router as feed_router
 from app.api.leaderboard import router as leaderboard_router
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 
 
 app = FastAPI(title="Recach API", version="0.1.0")
@@ -59,6 +61,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+media_dir = os.path.join(os.getcwd(), "uploads")
+os.makedirs(media_dir, exist_ok=True)
+app.mount("/media", StaticFiles(directory=media_dir), name="media")
 
 
 

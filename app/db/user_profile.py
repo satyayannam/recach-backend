@@ -12,6 +12,7 @@ class UserProfile(Base):
     # ---- Identity / public-facing ----
     headline: Mapped[str | None] = mapped_column(String(140), nullable=True)   # "MS Data Science @ FAU | NLP | Healthcare"
     about: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_photo_url: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     location: Mapped[str | None] = mapped_column(String(120), nullable=True)   # "Boca Raton, FL"
     pronouns: Mapped[str | None] = mapped_column(String(40), nullable=True)    # optional

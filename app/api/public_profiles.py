@@ -7,6 +7,7 @@ from typing import List
 from app.db.deps import get_db
 from app.db.models import User
 from app.db.recommendations import Recommendation
+from app.db.user_profile import UserProfile
 from app.services.public_user import search_public_users
 from app.services.username import normalize_username
 from app.api.public_profile_schemas import (
@@ -49,6 +50,9 @@ def public_user_by_username(username: str, db: Session = Depends(get_db)):
         "username": user.username,
     }
 
+    profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
+    base["profile_photo_url"] = profile.profile_photo_url if profile else None
+
     # Pull approved recommenders
     recs = (
         db.query(User.full_name, User.username)
@@ -67,5 +71,6 @@ def public_user_by_username(username: str, db: Session = Depends(get_db)):
     base["recommended_by"] = [
         RecommenderMini(full_name=name, username=u) for (name, u) in recs
     ]
+    base["recommender_count"] = len(recs)
 
     return base

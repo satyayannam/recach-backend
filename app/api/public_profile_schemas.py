@@ -10,6 +10,7 @@ class PublicUserSearchOut(BaseModel):
     headline: Optional[str] = None
     achievement_total: int
     recommendation_total: int
+    profile_photo_url: Optional[str] = None
 
 class RecommenderMini(BaseModel):
     full_name: str
@@ -20,3 +21,5 @@ class PublicUserOut(BaseModel):
     full_name: str
     username: str
     recommended_by: List[RecommenderMini] = []
+    recommender_count: int = 0
+    profile_photo_url: Optional[str] = None
