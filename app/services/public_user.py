@@ -1,6 +1,7 @@
 # app/services/public_user.py
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 
 from app.db.models import User
 from app.db.user_profile import UserProfile
@@ -24,7 +25,12 @@ def search_public_users(db: Session, q: str, limit: int = 10):
     users = (
         db.query(User)
         .filter(User.status == "APPROVED")
-        .filter(User.full_name.ilike(f"%{q}%"))
+        .filter(
+            or_(
+                User.full_name.ilike(f"%{q}%"),
+                User.username.ilike(f"%{q}%")
+            )
+        )
         .limit(limit)
         .all()
     )

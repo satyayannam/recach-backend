@@ -181,3 +181,21 @@ def toggle_post_caret(
         caret_count=int(caret_count),
         has_caret=has_caret
     )
+
+
+@router.delete("/{post_id}")
+def delete_post(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed to delete this post")
+
+    db.query(PostCaret).filter(PostCaret.post_id == post_id).delete()
+    db.delete(post)
+    db.commit()
+    return {"status": "deleted"}
