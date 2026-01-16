@@ -19,6 +19,8 @@ from app.api.admin_verifications import router as admin_verifications_router
 from app.api.admin_auth import router as admin_auth_router
 from app.api.feed import router as feed_router
 from app.api.leaderboard import router as leaderboard_router
+from app.api.reflections import router as reflections_router
+from app.api.posts import router as posts_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -49,6 +51,8 @@ app.include_router(admin_verifications_router)
 app.include_router(admin_auth_router)
 app.include_router(feed_router)
 app.include_router(leaderboard_router)
+app.include_router(reflections_router)
+app.include_router(posts_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

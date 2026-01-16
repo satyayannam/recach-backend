@@ -10,6 +10,9 @@ from app.db.models import User
 from app.api.schemas import UserCreate, UserOut
 from app.services.username import normalize_username
 from app.services.scores import get_achievement_total, get_recommendation_total
+from sqlalchemy import func
+from app.db.post import Post
+from app.db.post_caret import PostCaret
 from app.api.deps_auth import get_current_user
 
 
@@ -34,6 +37,21 @@ def get_my_recommendation_score(
 ):
     total = get_recommendation_total(db, current_user.id)
     return {"user_id": current_user.id, "recommendation_score": total}
+
+
+@router.get("/me/reflection-caret-score")
+def get_my_reflection_caret_score(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    total = (
+        db.query(func.count(PostCaret.id))
+        .join(Post, Post.id == PostCaret.post_id)
+        .filter(Post.user_id == current_user.id)
+        .scalar()
+        or 0
+    )
+    return {"user_id": current_user.id, "caret_score": int(total)}
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreate, db: Session = Depends(get_db)):

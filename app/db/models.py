@@ -6,6 +6,10 @@ from app.db.user_profile import UserProfile
 from app.db.work_experience import WorkExperience  # noqa: F401
 from app.db.recommendations import Recommendation  # noqa: F401
 from app.db.education import EducationEntry  # noqa: F401
+from app.db.reflection import Reflection  # noqa: F401
+from app.db.reflection_caret import ReflectionCaret  # noqa: F401
+from app.db.post import Post  # noqa: F401
+from app.db.post_caret import PostCaret  # noqa: F401
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
