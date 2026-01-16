@@ -153,6 +153,8 @@ def toggle_post_caret(
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
         raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot add caret to your own post")
 
     existing = (
         db.query(PostCaret)
