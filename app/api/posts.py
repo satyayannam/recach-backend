@@ -144,6 +144,47 @@ def get_post(
     )
 
 
+@router.put("/{post_id}", response_model=PostOut)
+def update_post(
+    post_id: int,
+    payload: PostCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if post.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not allowed to edit this post")
+    if payload.type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid post type")
+    if not payload.content or len(payload.content.strip()) < 20:
+        raise HTTPException(status_code=400, detail="Content must be at least 20 characters")
+
+    post.type = payload.type
+    post.content = payload.content.strip()
+    db.commit()
+    db.refresh(post)
+
+    profile = (
+        db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    )
+    caret_count = (
+        db.query(func.count(PostCaret.id))
+        .filter(PostCaret.post_id == post.id)
+        .scalar()
+        or 0
+    )
+    return PostOut(
+        id=post.id,
+        type=post.type,
+        content=post.content,
+        created_at=post.created_at,
+        user=build_user_out(current_user, profile),
+        caret_count=int(caret_count)
+    )
+
+
 @router.post("/{post_id}/caret", response_model=PostCaretOut)
 def toggle_post_caret(
     post_id: int,
