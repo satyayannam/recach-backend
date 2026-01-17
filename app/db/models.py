@@ -10,6 +10,10 @@ from app.db.reflection import Reflection  # noqa: F401
 from app.db.reflection_caret import ReflectionCaret  # noqa: F401
 from app.db.post import Post  # noqa: F401
 from app.db.post_caret import PostCaret  # noqa: F401
+from app.db.user_course import UserCourse  # noqa: F401
+from app.db.contact_method import ContactMethod  # noqa: F401
+from app.db.contact_request import ContactRequest  # noqa: F401
+from app.db.inbox_item import InboxItem  # noqa: F401
 from sqlalchemy import String
 from sqlalchemy.orm import Mapped, mapped_column
 
