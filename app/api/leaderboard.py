@@ -46,7 +46,7 @@ def combined_leaderboard(
         recommendation_scores.append(recommendation_score)
         rows.append(
             {
-                "user": {"id": u.id, "full_name": u.full_name},
+                "user": {"id": u.id, "full_name": u.full_name, "username": u.username},
                 "achievement_score": achievement_score,
                 "recommendation_score": recommendation_score,
             }
@@ -90,7 +90,7 @@ def achievement_leaderboard(
         score = get_achievement_total(db, u.id)
         rows.append(
             {
-                "user": {"id": u.id, "full_name": u.full_name},
+                "user": {"id": u.id, "full_name": u.full_name, "username": u.username},
                 "score": score,
             }
         )
@@ -115,7 +115,7 @@ def recommendation_leaderboard(
         score = get_recommendation_total(db, u.id)
         rows.append(
             {
-                "user": {"id": u.id, "full_name": u.full_name},
+                "user": {"id": u.id, "full_name": u.full_name, "username": u.username},
                 "score": score,
             }
         )

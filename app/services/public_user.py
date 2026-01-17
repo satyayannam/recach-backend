@@ -1,10 +1,14 @@
 # app/services/public_user.py
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 
 from app.db.models import User
 from app.db.user_profile import UserProfile
+from app.db.post import Post
+from app.db.post_caret import PostCaret
+from app.db.education import EducationEntry
+from app.db.work_experience import WorkExperience
 from app.api.achievement import get_user_achievement
 from app.api.recommendation_score import get_recommendation_score
 
@@ -19,6 +23,36 @@ def _totals(db: Session, user_id: int) -> tuple[int, int]:
     recommendation_total = rec["recommendation_score"]["total"]
 
     return achievement_total, recommendation_total
+
+
+def _verified_education(db: Session, user_id: int):
+    rows = (
+        db.query(EducationEntry.university_name, EducationEntry.degree_type)
+        .filter(
+            EducationEntry.user_id == user_id,
+            EducationEntry.verification_status == "VERIFIED",
+        )
+        .all()
+    )
+    return [
+        {"university_name": university_name, "degree_type": degree_type}
+        for (university_name, degree_type) in rows
+    ]
+
+
+def _verified_work(db: Session, user_id: int):
+    rows = (
+        db.query(WorkExperience.company_name, WorkExperience.title)
+        .filter(
+            WorkExperience.user_id == user_id,
+            WorkExperience.verification_status == "VERIFIED",
+        )
+        .all()
+    )
+    return [
+        {"company_name": company_name, "title": title}
+        for (company_name, title) in rows
+    ]
 
 
 def search_public_users(db: Session, q: str, limit: int = 10):
@@ -39,6 +73,13 @@ def search_public_users(db: Session, q: str, limit: int = 10):
     for u in users:
         profile = db.query(UserProfile).filter(UserProfile.user_id == u.id).first()
         achievement_total, recommendation_total = _totals(db, u.id)
+        caret_score = (
+            db.query(func.count(PostCaret.id))
+            .join(Post, Post.id == PostCaret.post_id)
+            .filter(Post.user_id == u.id)
+            .scalar()
+            or 0
+        )
 
         results.append({
             "user_id": u.id,
@@ -47,6 +88,9 @@ def search_public_users(db: Session, q: str, limit: int = 10):
             "headline": getattr(profile, "headline", None) if profile else None,
             "achievement_total": achievement_total,
             "recommendation_total": recommendation_total,
+            "caret_score": int(caret_score),
+            "verified_education": _verified_education(db, u.id),
+            "verified_work": _verified_work(db, u.id),
             "profile_photo_url": getattr(profile, "profile_photo_url", None) if profile else None,
         })
 
@@ -63,6 +107,8 @@ def get_public_user(db: Session, user_id: int):
         raise HTTPException(status_code=404, detail="Profile not found")
 
     achievement_total, recommendation_total = _totals(db, user_id)
+    verified_education = _verified_education(db, user_id)
+    verified_work = _verified_work(db, user_id)
 
     interests = []
     if hasattr(profile, "interests") and profile.interests:
@@ -80,4 +126,6 @@ def get_public_user(db: Session, user_id: int):
         "interests": interests,
         "achievement_total": achievement_total,
         "recommendation_total": recommendation_total,
+        "verified_education": verified_education,
+        "verified_work": verified_work,
     }

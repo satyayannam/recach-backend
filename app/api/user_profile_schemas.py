@@ -6,6 +6,7 @@ Visibility = Literal["PUBLIC", "ONLY_CONNECTIONS", "PRIVATE"]
 
 
 class UserProfileUpdate(BaseModel):
+    username: Optional[str] = None
     headline: Optional[str] = Field(default=None, max_length=140)
     about: Optional[str] = None
     profile_photo_url: Optional[str] = Field(default=None, max_length=255)
@@ -51,6 +52,8 @@ class UserProfileOut(UserProfileUpdate):
     id: int
     user_id: int
     visibility: Visibility  # ensure returned even if not provided in update
+    email: Optional[str] = None
+    full_name: Optional[str] = None
 
     class Config:
         from_attributes = True

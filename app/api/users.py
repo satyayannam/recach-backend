@@ -13,6 +13,8 @@ from app.services.scores import get_achievement_total, get_recommendation_total
 from sqlalchemy import func
 from app.db.post import Post
 from app.db.post_caret import PostCaret
+from app.db.user_profile import UserProfile
+from app.api.post_schemas import CaretNotificationOut, CaretUserOut
 from app.api.deps_auth import get_current_user
 
 
@@ -52,6 +54,57 @@ def get_my_reflection_caret_score(
         or 0
     )
     return {"user_id": current_user.id, "caret_score": int(total)}
+
+
+@router.get("/me/caret-notifications", response_model=list[CaretNotificationOut])
+def get_my_caret_notifications(
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    limit = max(1, min(limit, 200))
+    rows = (
+        db.query(PostCaret, Post, User, UserProfile)
+        .join(Post, Post.id == PostCaret.post_id)
+        .join(User, User.id == PostCaret.user_id)
+        .outerjoin(UserProfile, UserProfile.user_id == User.id)
+        .filter(Post.user_id == current_user.id)
+        .order_by(PostCaret.created_at.desc())
+        .limit(limit)
+        .all()
+    )
+
+    post_ids = [post.id for (_, post, _, _) in rows]
+    caret_counts = {}
+    if post_ids:
+        counts = (
+            db.query(PostCaret.post_id, func.count(PostCaret.id))
+            .filter(PostCaret.post_id.in_(post_ids))
+            .group_by(PostCaret.post_id)
+            .all()
+        )
+        caret_counts = {post_id: int(count) for post_id, count in counts}
+
+    notifications = []
+    for caret, post, giver, giver_profile in rows:
+        notifications.append(
+            CaretNotificationOut(
+                id=caret.id,
+                post_id=post.id,
+                post_type=post.type,
+                post_content=post.content,
+                caret_count=caret_counts.get(post.id, 0),
+                created_at=caret.created_at,
+                giver=CaretUserOut(
+                    id=giver.id,
+                    username=giver.username,
+                    full_name=giver.full_name,
+                    profile_photo_url=getattr(giver_profile, "profile_photo_url", None),
+                ),
+            )
+        )
+
+    return notifications
 
 @router.post("", response_model=UserOut, status_code=status.HTTP_201_CREATED)
 def create_user(payload: UserCreate, db: Session = Depends(get_db)):

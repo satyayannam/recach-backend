@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 
 from app.db.deps import get_db
 from app.db.user_profile import UserProfile
+from app.db.models import User
+from app.services.username import normalize_username
 from app.api.user_profile_schemas import UserProfileOut, UserProfileUpdate
 from app.api.deps_auth import get_current_user
 
@@ -20,7 +22,11 @@ def get_my_profile(
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
-    return profile
+    payload = UserProfileOut.model_validate(profile).model_dump()
+    payload["username"] = current_user.username
+    payload["email"] = current_user.email
+    payload["full_name"] = current_user.full_name
+    return payload
 
 
 @router.put("", response_model=UserProfileOut)
@@ -31,6 +37,17 @@ def upsert_my_profile(
 ):
     profile = db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
     data = payload.model_dump(exclude_unset=True)
+    username_value = data.pop("username", None)
+
+    if username_value:
+        try:
+            normalized = normalize_username(username_value)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        existing = db.query(User).filter(User.username == normalized).first()
+        if existing and existing.id != current_user.id:
+            raise HTTPException(status_code=409, detail="Username already taken")
+        current_user.username = normalized
 
     if profile is None:
         profile = UserProfile(user_id=current_user.id, **data)
@@ -41,7 +58,11 @@ def upsert_my_profile(
 
     db.commit()
     db.refresh(profile)
-    return profile
+    payload = UserProfileOut.model_validate(profile).model_dump()
+    payload["username"] = current_user.username
+    payload["email"] = current_user.email
+    payload["full_name"] = current_user.full_name
+    return payload
 
 
 @router.put("/photo", response_model=UserProfileOut)

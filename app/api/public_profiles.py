@@ -8,13 +8,17 @@ from app.db.deps import get_db
 from app.db.models import User
 from app.db.recommendations import Recommendation
 from app.db.user_profile import UserProfile
-from app.services.public_user import search_public_users
+from app.services.public_user import search_public_users, _verified_education, _verified_work
 from app.services.username import normalize_username
 from app.api.public_profile_schemas import (
     PublicUserSearchOut,
     PublicUserOut,
     RecommenderMini,
 )
+from sqlalchemy import func
+from app.db.post import Post
+from app.db.post_caret import PostCaret
+from app.services.public_user import _totals
 
 router = APIRouter(prefix="/public/users", tags=["Public Users"])
 
@@ -52,6 +56,18 @@ def public_user_by_username(username: str, db: Session = Depends(get_db)):
 
     profile = db.query(UserProfile).filter(UserProfile.user_id == user.id).first()
     base["profile_photo_url"] = profile.profile_photo_url if profile else None
+    achievement_total, recommendation_total = _totals(db, user.id)
+    base["achievement_total"] = achievement_total
+    base["recommendation_total"] = recommendation_total
+    base["caret_score"] = (
+        db.query(func.count(PostCaret.id))
+        .join(Post, Post.id == PostCaret.post_id)
+        .filter(Post.user_id == user.id)
+        .scalar()
+        or 0
+    )
+    base["verified_education"] = _verified_education(db, user.id)
+    base["verified_work"] = _verified_work(db, user.id)
 
     # Pull approved recommenders
     recs = (
@@ -68,9 +84,16 @@ def public_user_by_username(username: str, db: Session = Depends(get_db)):
         .all()
     )
 
-    base["recommended_by"] = [
-        RecommenderMini(full_name=name, username=u) for (name, u) in recs
-    ]
-    base["recommender_count"] = len(recs)
+    seen = set()
+    unique_recs = []
+    for name, uname in recs:
+        key = (uname or "").lower() or name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_recs.append(RecommenderMini(full_name=name, username=uname))
+
+    base["recommended_by"] = unique_recs
+    base["recommender_count"] = len(unique_recs)
 
     return base

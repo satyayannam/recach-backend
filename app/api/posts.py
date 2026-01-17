@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
-from app.api.deps_auth import get_current_user
+from app.api.deps_auth import get_current_user, get_optional_user
 from app.api.post_schemas import PostCaretOut, PostCreate, PostOut, PostUserOut
 from app.db.deps import get_db
 from app.db.models import User
@@ -28,7 +28,8 @@ def build_user_out(user: User, profile: UserProfile | None) -> PostUserOut:
         id=user.id,
         username=user.username,
         full_name=user.full_name,
-        university=university
+        university=university,
+        profile_photo_url=profile.profile_photo_url if profile else None
     )
 
 
@@ -61,18 +62,23 @@ def create_post(
         content=post.content,
         created_at=post.created_at,
         user=build_user_out(current_user, profile),
-        caret_count=0
+        caret_count=0,
+        has_caret=False
     )
 
 
 @router.get("", response_model=list[PostOut])
 def list_posts(
     limit: int = Query(50, ge=1, le=200),
+    user_id: int | None = Query(None),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
 ):
+    query = db.query(Post)
+    if user_id is not None:
+        query = query.filter(Post.user_id == user_id)
     posts = (
-        db.query(Post)
-        .order_by(desc(Post.created_at))
+        query.order_by(desc(Post.created_at))
         .limit(limit)
         .all()
     )
@@ -94,6 +100,17 @@ def list_posts(
         .all()
         if post_ids else []
     )
+    user_carets = set()
+    if current_user and post_ids:
+        user_carets = {
+            post_id
+            for (post_id,) in db.query(PostCaret.post_id)
+            .filter(
+                PostCaret.user_id == current_user.id,
+                PostCaret.post_id.in_(post_ids),
+            )
+            .all()
+        }
     user_map = {user.id: user for user in users}
     profile_map = {profile.user_id: profile for profile in profiles}
     caret_map = {post_id: count for post_id, count in caret_counts}
@@ -110,7 +127,8 @@ def list_posts(
                 content=post.content,
                 created_at=post.created_at,
                 user=build_user_out(user, profile_map.get(user.id)),
-                caret_count=int(caret_map.get(post.id, 0))
+                caret_count=int(caret_map.get(post.id, 0)),
+                has_caret=post.id in user_carets
             )
         )
     return output
@@ -120,6 +138,7 @@ def list_posts(
 def get_post(
     post_id: int,
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_optional_user),
 ):
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -134,13 +153,25 @@ def get_post(
         .scalar()
         or 0
     )
+    has_caret = False
+    if current_user:
+        has_caret = (
+            db.query(PostCaret)
+            .filter(
+                PostCaret.post_id == post.id,
+                PostCaret.user_id == current_user.id,
+            )
+            .first()
+            is not None
+        )
     return PostOut(
         id=post.id,
         type=post.type,
         content=post.content,
         created_at=post.created_at,
         user=build_user_out(user, profile),
-        caret_count=int(caret_count)
+        caret_count=int(caret_count),
+        has_caret=has_caret
     )
 
 
@@ -181,7 +212,8 @@ def update_post(
         content=post.content,
         created_at=post.created_at,
         user=build_user_out(current_user, profile),
-        caret_count=int(caret_count)
+        caret_count=int(caret_count),
+        has_caret=False
     )
 
 
