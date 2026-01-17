@@ -129,6 +129,24 @@ def accept_contact_request(
     if inbox_item:
         inbox_item.status = "ACCEPTED"
 
+    contact = (
+        db.query(ContactMethod).filter(ContactMethod.user_id == current_user.id).first()
+    )
+    accepted_notice = InboxItem(
+        user_id=request.requester_id,
+        type="CONTACT_ACCEPTED",
+        status="UNREAD",
+        payload_json={
+            "request_id": str(request.id),
+            "target_id": current_user.id,
+            "target_name": current_user.full_name,
+            "target_username": current_user.username,
+            "course_id": str(request.course_id),
+            "contact_method": contact.method if contact else None,
+        },
+    )
+    db.add(accepted_notice)
+
     db.commit()
     return {"status": "accepted"}
 

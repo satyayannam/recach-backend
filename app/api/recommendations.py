@@ -7,6 +7,7 @@ from app.api.deps_auth import get_current_user
 from app.db.deps import get_db
 from app.db.models import User
 from app.db.recommendations import Recommendation
+from app.db.inbox_item import InboxItem
 from app.services.username import normalize_username
 from app.api.recommendation_schemas import (
     RecommendationRequestIn,
@@ -134,6 +135,21 @@ def approve_recommendation(
     rec.note_title = payload.note_title
     rec.note_body = payload.note_body
     rec.decided_at = datetime.utcnow()
+
+    inbox_item = InboxItem(
+        user_id=rec.requester_id,
+        type="RECOMMENDATION_APPROVED",
+        status="UNREAD",
+        payload_json={
+            "recommendation_id": rec.id,
+            "recommender_id": current_user.id,
+            "recommender_name": current_user.full_name,
+            "recommender_username": current_user.username,
+            "note_title": rec.note_title,
+            "note_body": rec.note_body,
+        },
+    )
+    db.add(inbox_item)
 
     db.commit()
     db.refresh(rec)
