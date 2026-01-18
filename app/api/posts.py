@@ -4,11 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.api.deps_auth import get_current_user, get_optional_user
 from app.api.post_schemas import PostCaretOut, PostCreate, PostOut, PostUserOut
+from app.api.post_reply_schemas import PostReplyCreate, PostReplyOut
 from app.db.deps import get_db
+from app.db.inbox_item import InboxItem
 from app.db.models import User
 from app.db.post import Post
 from app.db.post_caret import PostCaret
+from app.db.post_reply import PostReply
+from app.db.post_reply_caret import PostReplyCaret
+from app.db.post_reply_owner_reaction import PostReplyOwnerReaction
 from app.db.user_profile import UserProfile
+from app.services.permissions import ensure_post_owner
 
 router = APIRouter(prefix="/posts", tags=["Posts"])
 
@@ -18,6 +24,8 @@ ALLOWED_TYPES = {
     "recent_realization",
     "currently_building"
 }
+
+ALLOWED_REPLY_TYPES = {"validate", "context", "impact", "clarify", "challenge"}
 
 
 def build_user_out(user: User, profile: UserProfile | None) -> PostUserOut:
@@ -31,6 +39,15 @@ def build_user_out(user: User, profile: UserProfile | None) -> PostUserOut:
         university=university,
         profile_photo_url=profile.profile_photo_url if profile else None
     )
+
+
+def build_reply_user_out(user: User, profile: UserProfile | None):
+    return {
+        "id": user.id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "profile_photo_url": profile.profile_photo_url if profile else None,
+    }
 
 
 @router.post("", response_model=PostOut, status_code=status.HTTP_201_CREATED)
@@ -254,6 +271,126 @@ def toggle_post_caret(
         caret_count=int(caret_count),
         has_caret=has_caret
     )
+
+
+@router.post("/{post_id}/replies", response_model=PostReplyOut, status_code=status.HTTP_201_CREATED)
+def create_post_reply(
+    post_id: int,
+    payload: PostReplyCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    if payload.type not in ALLOWED_REPLY_TYPES:
+        raise HTTPException(status_code=400, detail="Invalid reply type")
+
+    message = payload.message.strip()
+    if not message:
+        raise HTTPException(status_code=400, detail="Reply message is required")
+
+    if post.user_id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot reply to your own post")
+
+    recipient_id = post.user_id
+    recipient = db.query(User).filter(User.id == recipient_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient not found")
+
+    reply = PostReply(
+        post_id=post.id,
+        owner_id=post.user_id,
+        sender_id=current_user.id,
+        recipient_id=recipient_id,
+        type=payload.type,
+        message=message,
+    )
+    db.add(reply)
+    db.commit()
+    db.refresh(reply)
+
+    sender_profile = (
+        db.query(UserProfile).filter(UserProfile.user_id == current_user.id).first()
+    )
+    post_snippet = post.content.strip()
+    if len(post_snippet) > 160:
+        post_snippet = f"{post_snippet[:160]}..."
+
+    inbox_item = InboxItem(
+        user_id=recipient_id,
+        type="POST_REPLY",
+        payload_json={
+            "reply_id": reply.id,
+            "post_id": post.id,
+            "post_type": post.type,
+            "post_content": post_snippet,
+            "reply_type": reply.type,
+            "reply_message": reply.message,
+            "sender": build_reply_user_out(current_user, sender_profile),
+            "created_at": reply.created_at.isoformat(),
+        },
+    )
+    db.add(inbox_item)
+    db.commit()
+
+    return PostReplyOut(
+        id=reply.id,
+        post_id=reply.post_id,
+        owner_id=reply.owner_id,
+        sender_id=reply.sender_id,
+        recipient_id=reply.recipient_id,
+        type=reply.type,
+        message=reply.message,
+        created_at=reply.created_at,
+        sender=build_reply_user_out(current_user, sender_profile),
+        caret_given=False,
+        owner_reaction=None,
+    )
+
+
+@router.get("/{post_id}/replies", response_model=list[PostReplyOut])
+def list_post_replies(
+    post_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    post = db.query(Post).filter(Post.id == post_id).first()
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    ensure_post_owner(post.user_id, current_user.id, "Not allowed to view replies")
+
+    rows = (
+        db.query(PostReply, User, UserProfile, PostReplyCaret, PostReplyOwnerReaction)
+        .join(User, User.id == PostReply.sender_id)
+        .outerjoin(UserProfile, UserProfile.user_id == User.id)
+        .outerjoin(PostReplyCaret, PostReplyCaret.reply_id == PostReply.id)
+        .outerjoin(PostReplyOwnerReaction, PostReplyOwnerReaction.reply_id == PostReply.id)
+        .filter(PostReply.post_id == post_id)
+        .order_by(PostReply.created_at.desc())
+        .all()
+    )
+
+    replies: list[PostReplyOut] = []
+    for reply, sender, sender_profile, caret, reaction in rows:
+        replies.append(
+            PostReplyOut(
+                id=reply.id,
+                post_id=reply.post_id,
+                owner_id=reply.owner_id,
+                sender_id=reply.sender_id,
+                recipient_id=reply.recipient_id,
+                type=reply.type,
+                message=reply.message,
+                created_at=reply.created_at,
+                sender=build_reply_user_out(sender, sender_profile),
+                caret_given=bool(caret.is_given) if caret else False,
+                owner_reaction=reaction.reaction if reaction else None,
+            )
+        )
+    return replies
+
+
 
 
 @router.delete("/{post_id}")

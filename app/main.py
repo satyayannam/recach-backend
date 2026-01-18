@@ -24,7 +24,8 @@ from app.api.posts import router as posts_router
 from app.api.courses import router as courses_router
 from app.api.contact_methods import router as contact_methods_router
 from app.api.contact_requests import router as contact_requests_router
-from app.api.inbox import router as inbox_router
+from app.api.inbox import router as inbox_router, posts_router as inbox_posts_router
+from app.api.post_replies import router as post_replies_router
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
@@ -61,6 +62,8 @@ app.include_router(courses_router)
 app.include_router(contact_methods_router)
 app.include_router(contact_requests_router)
 app.include_router(inbox_router)
+app.include_router(inbox_posts_router)
+app.include_router(post_replies_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
